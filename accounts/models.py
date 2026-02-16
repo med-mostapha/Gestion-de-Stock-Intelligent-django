@@ -1,8 +1,7 @@
 from django.db import models
+from django.utils import timezone
 
-# Create your models here.
 from django.contrib.auth.models import AbstractUser
-from django.db import models
 
 
 class User(AbstractUser):
@@ -29,3 +28,36 @@ class Category(models.Model):
 
     def __str__(self):
         return f"{self.name} - {self.owner.username}"
+
+
+
+
+class Product(models.Model):
+    name = models.CharField(max_length=255)
+
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+
+    quantity = models.PositiveIntegerField()
+
+    min_threshold = models.PositiveIntegerField()
+
+    expiration_date = models.DateField(blank=True, null=True)
+
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.CASCADE,
+        related_name='products'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def is_low_stock(self):
+        return self.quantity <= self.min_threshold
+
+    def has_expiry(self):
+        if self.expiration_date:
+            return self.expiration_date <= timezone.now().date()
+        return False
+
+    def __str__(self):
+        return f"{self.name} - {self.category.name}"
