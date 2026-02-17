@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User
+from .models import User , Category
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):
@@ -17,3 +17,12 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             password=validated_data['password']
         )
         return user
+
+
+
+class CategorySerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Category
+        fields = ['id', 'name', 'description', 'created_at']
+        read_only_fields = ['id', 'created_at']
