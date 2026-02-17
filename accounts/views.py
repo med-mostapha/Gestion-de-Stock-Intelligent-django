@@ -1,16 +1,14 @@
 from rest_framework import generics
-from .models import User,Category
-from .serializers import UserRegisterSerializer
-
+from .serializers import UserRegisterSerializer,ProductSerializer
 from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth import authenticate
 from rest_framework import status
 from rest_framework.permissions import AllowAny
-
 from .serializers import CategorySerializer
 from rest_framework.permissions import IsAuthenticated
+from .models import User,Category,Product
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -39,8 +37,6 @@ class LoginView(APIView):
             "token": token.key
         })
 
-
-
 # Category
 class CategoryListCreateView(generics.ListCreateAPIView):
     serializer_class = CategorySerializer
@@ -52,10 +48,30 @@ class CategoryListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
 
-
 class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return Category.objects.filter(owner=self.request.user)
+    
+# Product
+class ProductListCreateView(generics.ListCreateAPIView):
+    serializer_class = ProductSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Product.objects.filter(category__owner=self.request.user)
+
+    def get_serializer_context(self):
+        return {'request': self.request}
+
+class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = ProductSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Product.objects.filter(category__owner=self.request.user)
+
+    def get_serializer_context(self):
+        return {'request': self.request}

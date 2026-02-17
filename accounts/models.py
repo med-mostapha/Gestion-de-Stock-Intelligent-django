@@ -8,7 +8,7 @@ class User(AbstractUser):
     phone = models.CharField(max_length=8, blank=True, null=True)
 
     def __str__(self):
-        return self.username
+        return self.username 
 
 
 from django.conf import settings
