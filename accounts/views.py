@@ -1,4 +1,7 @@
+from django.utils import timezone
 from rest_framework import generics
+from django.db import models
+
 from .serializers import UserRegisterSerializer,ProductSerializer
 from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
@@ -10,11 +13,11 @@ from .serializers import CategorySerializer
 from rest_framework.permissions import IsAuthenticated
 from .models import User,Category,Product
 
+# User
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = UserRegisterSerializer
     permission_classes = [AllowAny]
-
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
@@ -31,7 +34,8 @@ class LoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
-        token, created = Token.objects.get_or_create(user=user)
+        # _ => true if first login and false if not and have old token
+        token, _ = Token.objects.get_or_create(user=user)
 
         return Response({
             "token": token.key
@@ -75,3 +79,26 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_serializer_context(self):
         return {'request': self.request}
+
+# Products alert (list men le products li 3ado var9in)
+class ProductAlertView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        products = Product.objects.filter(category__owner=user)
+
+        low_stock = products.filter(quantity__lte=models.F('min_threshold'))
+
+        expired = products.filter(
+            expiration_date__isnull=False,
+            expiration_date__lte=timezone.now().date()
+        )
+
+        serializer = ProductSerializer
+
+        return Response({
+            "low_stock": serializer(low_stock, many=True, context={'request': request}).data,
+            "expired": serializer(expired, many=True, context={'request': request}).data,
+        })
