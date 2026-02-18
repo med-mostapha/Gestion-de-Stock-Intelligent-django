@@ -2,6 +2,7 @@ from django.utils import timezone
 from rest_framework import generics
 from django.db import models
 from django.db.models import F
+from django.db.models import Sum
 
 from .serializers import UserRegisterSerializer,ProductSerializer
 from rest_framework.authtoken.models import Token
@@ -124,12 +125,20 @@ class DashboardView(APIView):
             expiration_date__lte=today
         ).count()
 
+        total_stock = products.aggregate(
+            total=Sum('quantity')
+        )['total'] or 0
+
+
         data = {
             "counts": {
                 "total_products": products.count(),
                 "total_categories": categories.count(),
                 "low_stock": low_stock_count,
                 "expired_products": expired_count
+            },
+            "stock": {
+                "total_stock": total_stock
             }
         }
 
