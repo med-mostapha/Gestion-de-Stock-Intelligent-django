@@ -1,8 +1,8 @@
 from django.utils import timezone
 from rest_framework import generics
 from django.db import models
-from django.db.models import F
 from django.db.models import Sum
+from django.db.models import Sum, F, ExpressionWrapper, DecimalField
 
 from .serializers import UserRegisterSerializer,ProductSerializer
 from rest_framework.authtoken.models import Token
@@ -129,6 +129,25 @@ class DashboardView(APIView):
             total=Sum('quantity')
         )['total'] or 0
 
+        value_expression = ExpressionWrapper(
+            F('price') * F('quantity'),
+            output_field=DecimalField(max_digits=15, decimal_places=2)
+        )
+
+        total_inventory_value = products.aggregate(
+            total=Sum(value_expression)
+        )['total'] or 0
+
+        expired_products = products.filter(
+            expiration_date__isnull=False,
+            expiration_date__lte=today
+        )
+
+        expired_inventory_value = expired_products.aggregate(
+            total=Sum(value_expression)
+        )['total'] or 0
+
+        real_inventory_value = total_inventory_value - expired_inventory_value
 
         data = {
             "counts": {
@@ -139,7 +158,13 @@ class DashboardView(APIView):
             },
             "stock": {
                 "total_stock": total_stock
+            },
+            "financial": {
+                "total_inventory_value": float(total_inventory_value),
+                "expired_inventory_value": float(expired_inventory_value),
+                "real_inventory_value": float(real_inventory_value)
             }
+
         }
 
         return Response(data)
