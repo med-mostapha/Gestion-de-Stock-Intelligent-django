@@ -1,6 +1,7 @@
 from django.utils import timezone
 from rest_framework import generics
 from django.db import models
+from django.db.models import F
 
 from .serializers import UserRegisterSerializer,ProductSerializer
 from rest_framework.authtoken.models import Token
@@ -102,3 +103,34 @@ class ProductAlertView(APIView):
             "low_stock": serializer(low_stock, many=True, context={'request': request}).data,
             "expired": serializer(expired, many=True, context={'request': request}).data,
         })
+
+# Dashboard analytics
+class DashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        today = timezone.now().date()
+
+        products = Product.objects.filter(category__owner=user)
+        categories = Category.objects.filter(owner=user)
+
+        low_stock_count = products.filter(
+            quantity__lte=F('min_threshold')
+        ).count()
+
+        expired_count = products.filter(
+            expiration_date__isnull=False,
+            expiration_date__lte=today
+        ).count()
+
+        data = {
+            "counts": {
+                "total_products": products.count(),
+                "total_categories": categories.count(),
+                "low_stock": low_stock_count,
+                "expired_products": expired_count
+            }
+        }
+
+        return Response(data)
