@@ -685,6 +685,73 @@ Date comparison uses timezone-aware server logic.
 
 ---
 
+📊 DASHBOARD ENDPOINT
+📈 Inventory Analytics Overview
+
+GET /api/dashboard/
+Authentication required.
+
+Returns a complete inventory summary for the authenticated user.
+
+What It Provides
+📦 Counts
+
+Total products
+
+Total categories
+
+Low stock count
+
+Expired products count
+
+📦 Stock
+
+Total stock quantity
+
+💰 Financial Metrics
+
+Total inventory value (price × quantity)
+
+Expired inventory value
+
+Real inventory value (active stock only)
+
+📊 Analytics
+
+Inventory value grouped by category
+
+Example Response
+{
+  "counts": {
+    "total_products": 5,
+    "total_categories": 2,
+    "low_stock": 2,
+    "expired_products": 1
+  },
+  "stock": {
+    "total_stock": 31
+  },
+  "financial": {
+    "total_inventory_value": 36800.0,
+    "expired_inventory_value": 5000.0,
+    "real_inventory_value": 31800.0
+  },
+  "analytics": {
+    "value_by_category": [
+      {
+        "category": "Electronics",
+        "total_value": 29000.0
+      },
+      {
+        "category": "Fruits",
+        "total_value": 7800.0
+      }
+    ]
+  }
+}
+
+
+
 # 🧠 Product Object Reference
 
 | Field | Type | Description |
