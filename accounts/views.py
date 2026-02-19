@@ -134,6 +134,29 @@ class DashboardView(APIView):
             output_field=DecimalField(max_digits=15, decimal_places=2)
         )
 
+        value_by_category = (
+            products
+        .values('category__name')
+        .annotate(
+            total_value=Sum(value_expression)
+        )
+        .order_by('-total_value')
+        )
+
+        value_by_category = [
+        {
+            "category": item["category__name"],
+            "total_value": float(item["total_value"] or 0)
+        }
+        for item in (
+            products
+        .values('category__name')
+        .annotate(total_value=Sum(value_expression))
+        .order_by('-total_value')
+         )
+        ]
+
+
         total_inventory_value = products.aggregate(
             total=Sum(value_expression)
         )['total'] or 0
@@ -149,6 +172,8 @@ class DashboardView(APIView):
 
         real_inventory_value = total_inventory_value - expired_inventory_value
 
+
+
         data = {
             "counts": {
                 "total_products": products.count(),
@@ -163,6 +188,9 @@ class DashboardView(APIView):
                 "total_inventory_value": float(total_inventory_value),
                 "expired_inventory_value": float(expired_inventory_value),
                 "real_inventory_value": float(real_inventory_value)
+            },
+            "analytics": {
+                "value_by_category": value_by_category
             }
 
         }
