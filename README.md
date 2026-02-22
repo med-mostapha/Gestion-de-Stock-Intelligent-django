@@ -669,7 +669,7 @@ Date comparison uses timezone-aware server logic.
   "expired": [
     {
       "id": 5,
-      "name": "Milk",
+      "name": "Water",
       "price": "2.50",
       "quantity": 10,
       "min_threshold": 2,
