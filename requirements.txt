@@ -6,6 +6,8 @@ django-environ==0.13.0
 django-filter==25.2
 djangorestframework==3.16.1
 environ==1.0
+gunicorn==25.1.0
+packaging==26.0
 psycopg==3.3.3
 psycopg-binary==3.3.3
 psycopg2-binary==2.9.11
