@@ -62,26 +62,56 @@ class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
         return Category.objects.filter(owner=self.request.user)
     
 # Product
+from django.db.models import Case, When, BooleanField, F
+from django.utils import timezone
+
 class ProductListCreateView(generics.ListCreateAPIView):
     serializer_class = ProductSerializer
-    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Product.objects.filter(category__owner=self.request.user)
+        today = timezone.now().date()
+        return Product.objects.select_related('category').filter(
+            category__owner=self.request.user
+        ).annotate(
+            is_low_stock=Case(
+                When(quantity__lte=F('min_threshold'), then=True),
+                default=False,
+                output_field=BooleanField(),
+            ),
+            has_expiry=Case(
+                When(expiration_date__lte=today, then=True),
+                default=False,
+                output_field=BooleanField(),
+            )
+        ).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        serializer.save()
 
     def get_serializer_context(self):
         return {'request': self.request}
 
+# Apply similar logic to ProductDetailView
 class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ProductSerializer
-    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Product.objects.filter(category__owner=self.request.user)
-
-    def get_serializer_context(self):
-        return {'request': self.request}
-
+        # Always use the same optimized queryset for detail views to ensure consistency
+        today = timezone.now().date()
+        return Product.objects.select_related('category').filter(
+            category__owner=self.request.user
+        ).annotate(
+            is_low_stock=Case(
+                When(quantity__lte=F('min_threshold'), then=True),
+                default=False,
+                output_field=BooleanField(),
+            ),
+            has_expiry=Case(
+                When(expiration_date__lte=today, then=True),
+                default=False,
+                output_field=BooleanField(),
+            )
+        )
 # Products alert (list men le products li 3ado var9in)
 class ProductAlertView(APIView):
     permission_classes = [IsAuthenticated]
@@ -113,86 +143,52 @@ class DashboardView(APIView):
         user = request.user
         today = timezone.now().date()
 
+        # Get base querysets
         products = Product.objects.filter(category__owner=user)
         categories = Category.objects.filter(owner=user)
 
-        low_stock_count = products.filter(
-            quantity__lte=F('min_threshold')
-        ).count()
-
-        expired_count = products.filter(
-            expiration_date__isnull=False,
-            expiration_date__lte=today
-        ).count()
-
-        total_stock = products.aggregate(
-            total=Sum('quantity')
-        )['total'] or 0
-
-        value_expression = ExpressionWrapper(
-            F('price') * F('quantity'),
-            output_field=DecimalField(max_digits=15, decimal_places=2)
+        # 1. Advanced Aggregation (All counts in 1 query)
+        stats = products.aggregate(
+            total_products=models.Count('id'),
+            total_stock=Sum('quantity'),
+            low_stock_count=Sum(
+                Case(When(quantity__lte=F('min_threshold'), then=1), default=0, output_field=models.IntegerField())
+            ),
+            expired_count=Sum(
+                Case(When(expiration_date__lte=today, then=1), default=0, output_field=models.IntegerField())
+            ),
+            total_value=Sum(F('price') * F('quantity'), output_field=DecimalField(max_digits=15, decimal_places=2))
         )
 
+        # 2. Expired Value Calculation
+        expired_value = products.filter(expiration_date__lte=today).aggregate(
+            val=Sum(F('price') * F('quantity'), output_field=DecimalField(max_digits=15, decimal_places=2))
+        )['val'] or 0
+
+        # 3. Category Analytics (Efficient Grouping)
         value_by_category = (
-            products
-        .values('category__name')
-        .annotate(
-            total_value=Sum(value_expression)
-        )
-        .order_by('-total_value')
+            products.values('category__name')
+            .annotate(total_value=Sum(F('price') * F('quantity')))
+            .order_by('-total_value')
         )
 
-        value_by_category = [
-        {
-            "category": item["category__name"],
-            "total_value": float(item["total_value"] or 0)
-        }
-        for item in (
-            products
-        .values('category__name')
-        .annotate(total_value=Sum(value_expression))
-        .order_by('-total_value')
-         )
-        ]
-
-
-        total_inventory_value = products.aggregate(
-            total=Sum(value_expression)
-        )['total'] or 0
-
-        expired_products = products.filter(
-            expiration_date__isnull=False,
-            expiration_date__lte=today
-        )
-
-        expired_inventory_value = expired_products.aggregate(
-            total=Sum(value_expression)
-        )['total'] or 0
-
-        real_inventory_value = total_inventory_value - expired_inventory_value
-
-
-
-        data = {
+        return Response({
             "counts": {
-                "total_products": products.count(),
+                "total_products": stats['total_products'] or 0,
                 "total_categories": categories.count(),
-                "low_stock": low_stock_count,
-                "expired_products": expired_count
+                "low_stock": stats['low_stock_count'] or 0,
+                "expired_products": stats['expired_count'] or 0
             },
             "stock": {
-                "total_stock": total_stock
+                "total_stock": stats['total_stock'] or 0
             },
             "financial": {
-                "total_inventory_value": float(total_inventory_value),
-                "expired_inventory_value": float(expired_inventory_value),
-                "real_inventory_value": float(real_inventory_value)
+                "total_inventory_value": float(stats['total_value'] or 0),
+                "expired_inventory_value": float(expired_value),
+                "real_inventory_value": float((stats['total_value'] or 0) - expired_value)
             },
-            "analytics": {
-                "value_by_category": value_by_category
-            }
-
-        }
-
-        return Response(data)
+            "analytics": [
+                {"category": item['category__name'], "total_value": float(item['total_value'] or 0)}
+                for item in value_by_category
+            ]
+        })
