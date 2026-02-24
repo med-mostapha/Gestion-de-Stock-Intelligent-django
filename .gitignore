@@ -1,7 +1,16 @@
-venv/
+# Python
 __pycache__/
-*.pyc
-db.sqlite3
+*.py[cod]
+*$py.class
+venv/
+env/
+
+# Sensitive Data
 .env
-.idea/
+
+# Database
+*.sqlite3
+
+# IDEs
 .vscode/
+.idea/
