@@ -1,21 +1,27 @@
 from django.utils import timezone
-from rest_framework import generics
 from django.db import models
-from django.db.models import Sum
-from django.db.models import Sum, F, ExpressionWrapper, DecimalField
-
-from .serializers import UserRegisterSerializer,ProductSerializer
-from rest_framework.authtoken.models import Token
-from rest_framework.response import Response
-from rest_framework.views import APIView
+from django.db.models import Sum, F, Case, When, BooleanField, DecimalField
 from django.contrib.auth import authenticate
-from rest_framework import status
-from rest_framework.permissions import AllowAny
-from .serializers import CategorySerializer
-from rest_framework.permissions import IsAuthenticated
-from .models import User,Category,Product
 
-# User
+from rest_framework import generics, status, filters
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.authtoken.models import Token
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.pagination import PageNumberPagination
+
+from django_filters.rest_framework import DjangoFilterBackend
+
+from .serializers import UserRegisterSerializer, ProductSerializer, CategorySerializer
+from .models import User, Category, Product
+
+# --- PAGINATION CONFIG ---
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+# --- USER AUTH ---
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = UserRegisterSerializer
@@ -23,50 +29,41 @@ class RegisterView(generics.CreateAPIView):
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
-
     def post(self, request):
         username = request.data.get("username")
         password = request.data.get("password")
-
         user = authenticate(username=username, password=password)
-
         if user is None:
-            return Response(
-                {"error": "Invalid credentials"},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-
-        # _ => true if first login and false if not and have old token
+            return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
         token, _ = Token.objects.get_or_create(user=user)
+        return Response({"token": token.key})
 
-        return Response({
-            "token": token.key
-        })
-
-# Category
+# --- CATEGORY VIEWS ---
 class CategoryListCreateView(generics.ListCreateAPIView):
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated]
-
     def get_queryset(self):
         return Category.objects.filter(owner=self.request.user)
-
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
 
 class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated]
-
     def get_queryset(self):
         return Category.objects.filter(owner=self.request.user)
     
-# Product
-from django.db.models import Case, When, BooleanField, F
-from django.utils import timezone
-
+# --- PRODUCT VIEWS (With Search, Filter & Pagination) ---
 class ProductListCreateView(generics.ListCreateAPIView):
     serializer_class = ProductSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+    
+    # Enable Filtering, Search, and Ordering
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['category']
+    search_fields = ['name']
+    ordering_fields = ['price', 'quantity', 'created_at']
 
     def get_queryset(self):
         today = timezone.now().date()
@@ -75,13 +72,11 @@ class ProductListCreateView(generics.ListCreateAPIView):
         ).annotate(
             is_low_stock=Case(
                 When(quantity__lte=F('min_threshold'), then=True),
-                default=False,
-                output_field=BooleanField(),
+                default=False, output_field=BooleanField(),
             ),
             has_expiry=Case(
                 When(expiration_date__lte=today, then=True),
-                default=False,
-                output_field=BooleanField(),
+                default=False, output_field=BooleanField(),
             )
         ).order_by('-created_at')
 
@@ -91,81 +86,61 @@ class ProductListCreateView(generics.ListCreateAPIView):
     def get_serializer_context(self):
         return {'request': self.request}
 
-# Apply similar logic to ProductDetailView
 class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ProductSerializer
-
+    permission_classes = [IsAuthenticated]
     def get_queryset(self):
-        # Always use the same optimized queryset for detail views to ensure consistency
         today = timezone.now().date()
         return Product.objects.select_related('category').filter(
             category__owner=self.request.user
         ).annotate(
             is_low_stock=Case(
                 When(quantity__lte=F('min_threshold'), then=True),
-                default=False,
-                output_field=BooleanField(),
+                default=False, output_field=BooleanField(),
             ),
             has_expiry=Case(
                 When(expiration_date__lte=today, then=True),
-                default=False,
-                output_field=BooleanField(),
+                default=False, output_field=BooleanField(),
             )
         )
-# Products alert (list men le products li 3ado var9in)
+
+# --- ALERTS VIEW ---
 class ProductAlertView(APIView):
     permission_classes = [IsAuthenticated]
-
     def get(self, request):
-        user = request.user
-
-        products = Product.objects.filter(category__owner=user)
-
-        low_stock = products.filter(quantity__lte=models.F('min_threshold'))
-
-        expired = products.filter(
-            expiration_date__isnull=False,
-            expiration_date__lte=timezone.now().date()
+        today = timezone.now().date()
+        base_qs = Product.objects.select_related('category').filter(
+            category__owner=request.user
+        ).annotate(
+            is_low_stock=Case(When(quantity__lte=F('min_threshold'), then=True), default=False, output_field=BooleanField()),
+            has_expiry=Case(When(expiration_date__lte=today, then=True), default=False, output_field=BooleanField())
         )
-
-        serializer = ProductSerializer
-
         return Response({
-            "low_stock": serializer(low_stock, many=True, context={'request': request}).data,
-            "expired": serializer(expired, many=True, context={'request': request}).data,
+            "low_stock": ProductSerializer(base_qs.filter(is_low_stock=True), many=True, context={'request': request}).data,
+            "expired": ProductSerializer(base_qs.filter(has_expiry=True), many=True, context={'request': request}).data,
         })
 
-# Dashboard analytics
+# --- DASHBOARD VIEW ---
 class DashboardView(APIView):
     permission_classes = [IsAuthenticated]
-
     def get(self, request):
         user = request.user
         today = timezone.now().date()
-
-        # Get base querysets
         products = Product.objects.filter(category__owner=user)
         categories = Category.objects.filter(owner=user)
 
-        # 1. Advanced Aggregation (All counts in 1 query)
         stats = products.aggregate(
             total_products=models.Count('id'),
             total_stock=Sum('quantity'),
-            low_stock_count=Sum(
-                Case(When(quantity__lte=F('min_threshold'), then=1), default=0, output_field=models.IntegerField())
-            ),
-            expired_count=Sum(
-                Case(When(expiration_date__lte=today, then=1), default=0, output_field=models.IntegerField())
-            ),
+            low_stock_count=Sum(Case(When(quantity__lte=F('min_threshold'), then=1), default=0, output_field=models.IntegerField())),
+            expired_count=Sum(Case(When(expiration_date__lte=today, then=1), default=0, output_field=models.IntegerField())),
             total_value=Sum(F('price') * F('quantity'), output_field=DecimalField(max_digits=15, decimal_places=2))
         )
 
-        # 2. Expired Value Calculation
         expired_value = products.filter(expiration_date__lte=today).aggregate(
             val=Sum(F('price') * F('quantity'), output_field=DecimalField(max_digits=15, decimal_places=2))
         )['val'] or 0
 
-        # 3. Category Analytics (Efficient Grouping)
         value_by_category = (
             products.values('category__name')
             .annotate(total_value=Sum(F('price') * F('quantity')))
@@ -179,9 +154,7 @@ class DashboardView(APIView):
                 "low_stock": stats['low_stock_count'] or 0,
                 "expired_products": stats['expired_count'] or 0
             },
-            "stock": {
-                "total_stock": stats['total_stock'] or 0
-            },
+            "stock": {"total_stock": stats['total_stock'] or 0},
             "financial": {
                 "total_inventory_value": float(stats['total_value'] or 0),
                 "expired_inventory_value": float(expired_value),
