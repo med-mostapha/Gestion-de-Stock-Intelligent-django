@@ -1,55 +1,32 @@
-# 📦 Gestion de Stock Intelligent API  
-**Stock Management • Alert System • Secure REST Architecture**
+# 📦 Gestion de Stock Intelligent API
+**Stock Management • Alert System • Inventory Analytics • Secure REST Architecture**
 
-A secure and scalable Django REST API for managing:
-
-- Users  
-- Categories  
-- Products  
-- Stock thresholds  
-- Expiration alerts  
-
-Designed to be:# 📦 Gestion de Stock Intelligent API  
-**Stock Management • Alert System • Secure REST Architecture**
-
-A secure and scalable Django REST API for managing:
-
-- Users  
-- Categories  
-- Products  
-- Stock thresholds  
-- Expiration alerts  
-
-Designed to be:
-
-- Secure by default  
-- User-isolated  
-- Frontend-friendly  
-- Cleanly structured  
-- Easily extensible  
+A production-ready Django REST API for inventory management with analytics dashboard, filtering, pagination, and strict user-level isolation.
 
 ---
 
-# 🎯 Project Objectives
+# 🚀 Tech Stack
 
-- 🔐 Secure authentication  
-- 📦 User-owned product management  
-- 📂 Category-based organization  
-- ⚠️ Automatic low stock detection  
-- ⏳ Expired product alerts  
-- 🔒 Strict user-level data isolation  
-- 🧱 Clean RESTful architecture  
+- Python 3
+- Django 6
+- Django REST Framework
+- PostgreSQL
+- Token Authentication
+- Django Filter
+- Gunicorn (production)
+- dj-database-url
+- CORS Headers
 
 ---
 
 # 🏗️ Architecture Overview
 
-Each user owns:
+### Custom User Model
+- Extends `AbstractUser`
+- Adds optional `phone` field
+- Token-based authentication
 
-- Multiple categories  
-- Multiple products (inside categories)
-
-### Data relationship
+### Data Ownership Model
 
 ```
 User
@@ -57,71 +34,43 @@ User
       └── Product (category → owner)
 ```
 
-All queries are filtered by:
+All product queries are filtered by:
 
 ```python
 category__owner=request.user
 ```
 
-This guarantees no cross-user data access.
+This guarantees strict multi-tenant isolation.
 
 ---
 
 # 🔐 Authentication
 
-All protected endpoints require authentication.
+Token-based authentication.
 
-### Header format (Token)
+### Header Format
 
 ```
 Authorization: Token <your_token>
 ```
 
-### OR (JWT)
+### Auth Endpoints
 
-```
-Authorization: Bearer <your_access_token>
-```
+#### 📝 Register
+`POST /api/register/`
 
----
-
-# 🌍 Base API URL
-
-```
-/api/
-```
-
----
-
-# 👤 AUTHENTICATION ENDPOINTS
-
-## 📝 Register  
-**POST** `/api/register/`
-
-### Request
 ```json
 {
   "username": "mohamed",
-  "email": "mohamed@email.com",
-  "password": "StrongPassword123"
+  "email": "user@email.com",
+  "password": "StrongPassword123",
+  "phone": "12345678"
 }
 ```
 
-### Response
-```json
-{
-  "id": 1,
-  "username": "mohamed",
-  "email": "mohamed@email.com"
-}
-```
+#### 🔑 Login
+`POST /api/login/`
 
----
-
-## 🔑 Login  
-**POST** `/api/login/`
-
-### Request
 ```json
 {
   "username": "mohamed",
@@ -129,69 +78,48 @@ Authorization: Bearer <your_access_token>
 }
 ```
 
-### Response
-```json
-{
-  "token": "your_auth_token_here"
-}
-```
-
-Store token in:
-
-- LocalStorage (simple apps)  
-- HTTP-only cookies (recommended for production)  
-
----
-
-# 📂 CATEGORY ENDPOINTS
-
-Categories belong to the authenticated user.
-
-## 📋 List Categories  
-**GET** `/api/categories/`
-
-### Response
-```json
-[
-  {
-    "id": 1,
-    "name": "Electronics",
-    "created_at": "2026-02-10T10:00:00Z"
-  }
-]
-```
-
-## ➕ Create Category  
-**POST** `/api/categories/`
+Response:
 
 ```json
 {
-  "name": "Food"
+  "token": "your_auth_token"
 }
 ```
 
-## ✏️ Update Category  
-**PATCH** `/api/categories/{id}/`
+---
 
-## ❌ Delete Category  
-**DELETE** `/api/categories/{id}/`
+# 📂 Category Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/categories/` | List user categories |
+| POST | `/api/categories/` | Create category |
+| GET | `/api/categories/{id}/` | Retrieve |
+| PATCH | `/api/categories/{id}/` | Update |
+| DELETE | `/api/categories/{id}/` | Delete |
+
+Categories are automatically assigned to authenticated user.
 
 ---
 
-# 📦 PRODUCT ENDPOINTS
+# 📦 Product Endpoints
 
-Products belong to categories.  
-Categories belong to users.  
-Products are always user-scoped.
+### Features Included
+- Pagination
+- Filtering by category
+- Search by name
+- Ordering by price, quantity, created_at
+- Annotated fields: `is_low_stock`, `has_expiry`
 
-## 📋 List Products  
-**GET** `/api/products/`
+| Method | Endpoint |
+|--------|----------|
+| GET | `/api/products/` |
+| POST | `/api/products/` |
+| GET | `/api/products/{id}/` |
+| PATCH | `/api/products/{id}/` |
+| DELETE | `/api/products/{id}/` |
 
-## 🔍 Retrieve Product  
-**GET** `/api/products/{id}/`
-
-## ➕ Create Product  
-**POST** `/api/products/`
+### Example Create
 
 ```json
 {
@@ -204,523 +132,59 @@ Products are always user-scoped.
 }
 ```
 
-## ✏️ Update Product  
-**PATCH** `/api/products/{id}/`
-
-Example:
-
-```json
-{
-  "quantity": 2
-}
-```
-
-## ❌ Delete Product  
-**DELETE** `/api/products/{id}/`
-
 ---
 
-# ⚠️ ALERT SYSTEM
+# ⚠️ Alert Endpoint
 
-**GET** `/api/products/alerts/`  
-Authentication required.
+`GET /api/products/alerts/`
 
 Returns:
 
 - `low_stock`
 - `expired`
 
----
-
-## 🔎 Low Stock Definition
-
-A product is low stock if:
+### Low Stock Logic
 
 ```
 quantity <= min_threshold
 ```
 
-Uses Django `F()` expressions for database-level comparison.
+### Expired Logic
+
+```
+expiration_date <= today
+```
 
 ---
 
-## ⏳ Expired Definition
+# 📊 Dashboard Endpoint
 
-A product is expired if:
+## `GET /api/dashboard/`
 
-```
-expiration_date IS NOT NULL
-AND expiration_date <= today
-```
+Returns a full inventory analytics summary.
 
-Date comparison uses timezone-aware server logic.
+### 📦 Counts
+- Total products
+- Total categories
+- Low stock count
+- Expired products count
+
+### 📦 Stock
+- Total stock quantity
+
+### 💰 Financial Metrics
+- Total inventory value
+- Expired inventory value
+- Real inventory value (active stock only)
+
+### 📊 Category Analytics
+- Inventory value grouped by category
 
 ---
 
-## Example Response
+### Example Response
 
 ```json
-{
-  "low_stock": [
-    {
-      "id": 2,
-      "name": "Laptop",
-      "price": "1200.00",
-      "quantity": 2,
-      "min_threshold": 3,
-      "expiration_date": null,
-      "category": 2,
-      "is_low_stock": true,
-      "has_expiry": false,
-      "created_at": "2026-02-17T11:58:58.098847Z"
-    }
-  ],
-  "expired": [
-    {
-      "id": 5,
-      "name": "Milk",
-      "price": "2.50",
-      "quantity": 10,
-      "min_threshold": 2,
-      "expiration_date": "2020-01-01",
-      "category": 1,
-      "is_low_stock": false,
-      "has_expiry": true,
-      "created_at": "2026-02-10T08:00:00Z"
-    }
-  ]
-}
-```
-
----
-
-# 🧠 Product Object Reference
-
-| Field | Type | Description |
-|-------|------|------------|
-| id | Integer | Primary key |
-| name | String | Product name |
-| price | Decimal | Product price |
-| quantity | Integer | Current stock |
-| min_threshold | Integer | Alert threshold |
-| expiration_date | Date (nullable) | Expiry date |
-| category | Integer | Category ID |
-| created_at | DateTime | Creation timestamp |
-| is_low_stock | Boolean | Computed field |
-| has_expiry | Boolean | True if expiration_date exists |
-
----
-
-# 🔒 Security Model
-
-- All endpoints (except register/login) require authentication  
-- Products filtered by category ownership  
-- Categories filtered by owner  
-- No direct product-user relation exposed  
-- Backend enforces ownership rules  
-
----
-
-# 🖥️ Frontend Integration Reference
-
-## Typical Dashboard Flow
-
-1. Login → store token  
-2. Fetch categories  
-3. Fetch products  
-4. Fetch alerts  
-5. Render dashboard widgets  
-
-## Suggested Dashboard Widgets
-
-- Total Products  
-- Total Categories  
-- Low Stock Count  
-- Expired Products Count  
-
-Use:
-
-```
-GET /api/products/alerts/
-```
-
-to populate notification badges.
-
----
-
-# 🧪 How to Trigger Alerts (Testing)
-
-## Trigger Low Stock
-
-```json
-{
-  "quantity": 2,
-  "min_threshold": 3
-}
-```
-
-## Trigger Expired
-
-```json
-{
-  "expiration_date": "2020-01-01"
-}
-```
-
----
-
-# 📦 Installation (Backend)
-
-```bash
-git clone <repository-url>
-cd Gestion-de-Stock-Intelligent-django
-
-python -m venv venv
-source venv/bin/activate
-
-pip install -r requirements.txt
-
-python manage.py migrate
-python manage.py runserver
-```
-
----
-
-# 🛠️ Possible Future Enhancements
-
-- Pagination  
-- Search & filtering  
-- Sales tracking  
-- Stock movement history  
-- Email alerts  
-- Admin dashboard  
-- Role-based permissions  
-- Docker deployment  
-- CI/CD pipeline  
-
----
-
-# 🏁 Conclusion
-
-This API provides:
-
-- Clean REST structure  
-- Secure user isolation  
-- Alert system ready for dashboard integration  
-- Frontend-ready responses  
-- Scalable architecture  
-
-You can build the entire frontend using this README as your backend reference — without reopening the Django codebase.
-
-
-- Secure by default  
-- User-isolated  
-- Frontend-friendly  
-- Cleanly structured  
-- Easily extensible  
-
----
-
-# 🎯 Project Objectives
-
-- 🔐 Secure authentication  
-- 📦 User-owned product management  
-- 📂 Category-based organization  
-- ⚠️ Automatic low stock detection  
-- ⏳ Expired product alerts  
-- 🔒 Strict user-level data isolation  
-- 🧱 Clean RESTful architecture  
-
----
-
-# 🏗️ Architecture Overview
-
-Each user owns:
-
-- Multiple categories  
-- Multiple products (inside categories)
-
-### Data relationship
-
-```
-User
- └── Category (owner = user)
-      └── Product (category → owner)
-```
-
-All queries are filtered by:
-
-```python
-category__owner=request.user
-```
-
-This guarantees no cross-user data access.
-
----
-
-# 🔐 Authentication
-
-All protected endpoints require authentication.
-
-### Header format (Token)
-
-```
-Authorization: Token <your_token>
-```
-
-### OR (JWT)
-
-```
-Authorization: Bearer <your_access_token>
-```
-
----
-
-# 🌍 Base API URL
-
-```
-/api/
-```
-
----
-
-# 👤 AUTHENTICATION ENDPOINTS
-
-## 📝 Register  
-**POST** `/api/register/`
-
-### Request
-```json
-{
-  "username": "mohamed",
-  "email": "mohamed@email.com",
-  "password": "StrongPassword123"
-}
-```
-
-### Response
-```json
-{
-  "id": 1,
-  "username": "mohamed",
-  "email": "mohamed@email.com"
-}
-```
-
----
-
-## 🔑 Login  
-**POST** `/api/login/`
-
-### Request
-```json
-{
-  "username": "mohamed",
-  "password": "StrongPassword123"
-}
-```
-
-### Response
-```json
-{
-  "token": "your_auth_token_here"
-}
-```
-
-Store token in:
-
-- LocalStorage (simple apps)  
-- HTTP-only cookies (recommended for production)  
-
----
-
-# 📂 CATEGORY ENDPOINTS
-
-Categories belong to the authenticated user.
-
-## 📋 List Categories  
-**GET** `/api/categories/`
-
-### Response
-```json
-[
-  {
-    "id": 1,
-    "name": "Electronics",
-    "created_at": "2026-02-10T10:00:00Z"
-  }
-]
-```
-
-## ➕ Create Category  
-**POST** `/api/categories/`
-
-```json
-{
-  "name": "Food"
-}
-```
-
-## ✏️ Update Category  
-**PATCH** `/api/categories/{id}/`
-
-## ❌ Delete Category  
-**DELETE** `/api/categories/{id}/`
-
----
-
-# 📦 PRODUCT ENDPOINTS
-
-Products belong to categories.  
-Categories belong to users.  
-Products are always user-scoped.
-
-## 📋 List Products  
-**GET** `/api/products/`
-
-## 🔍 Retrieve Product  
-**GET** `/api/products/{id}/`
-
-## ➕ Create Product  
-**POST** `/api/products/`
-
-```json
-{
-  "name": "Laptop",
-  "price": "1200.00",
-  "quantity": 10,
-  "min_threshold": 3,
-  "expiration_date": "2026-12-31",
-  "category": 2
-}
-```
-
-## ✏️ Update Product  
-**PATCH** `/api/products/{id}/`
-
-Example:
-
-```json
-{
-  "quantity": 2
-}
-```
-
-## ❌ Delete Product  
-**DELETE** `/api/products/{id}/`
-
----
-
-# ⚠️ ALERT SYSTEM
-
-**GET** `/api/products/alerts/`  
-Authentication required.
-
-Returns:
-
-- `low_stock`
-- `expired`
-
----
-
-## 🔎 Low Stock Definition
-
-A product is low stock if:
-
-```
-quantity <= min_threshold
-```
-
-Uses Django `F()` expressions for database-level comparison.
-
----
-
-## ⏳ Expired Definition
-
-A product is expired if:
-
-```
-expiration_date IS NOT NULL
-AND expiration_date <= today
-```
-
-Date comparison uses timezone-aware server logic.
-
----
-
-## Example Response
-
-```json
-{
-  "low_stock": [
-    {
-      "id": 2,
-      "name": "Laptop",
-      "price": "1200.00",
-      "quantity": 2,
-      "min_threshold": 3,
-      "expiration_date": null,
-      "category": 2,
-      "is_low_stock": true,
-      "has_expiry": false,
-      "created_at": "2026-02-17T11:58:58.098847Z"
-    }
-  ],
-  "expired": [
-    {
-      "id": 5,
-      "name": "Water",
-      "price": "2.50",
-      "quantity": 10,
-      "min_threshold": 2,
-      "expiration_date": "2020-01-01",
-      "category": 1,
-      "is_low_stock": false,
-      "has_expiry": true,
-      "created_at": "2026-02-10T08:00:00Z"
-    }
-  ]
-}
-```
-
----
-
-📊 DASHBOARD ENDPOINT
-📈 Inventory Analytics Overview
-
-GET /api/dashboard/
-Authentication required.
-
-Returns a complete inventory summary for the authenticated user.
-
-What It Provides
-📦 Counts
-
-Total products
-
-Total categories
-
-Low stock count
-
-Expired products count
-
-📦 Stock
-
-Total stock quantity
-
-💰 Financial Metrics
-
-Total inventory value (price × quantity)
-
-Expired inventory value
-
-Real inventory value (active stock only)
-
-📊 Analytics
-
-Inventory value grouped by category
-
-Example Response
 {
   "counts": {
     "total_products": 5,
@@ -736,98 +200,78 @@ Example Response
     "expired_inventory_value": 5000.0,
     "real_inventory_value": 31800.0
   },
-  "analytics": {
-    "value_by_category": [
-      {
-        "category": "Electronics",
-        "total_value": 29000.0
-      },
-      {
-        "category": "Fruits",
-        "total_value": 7800.0
-      }
-    ]
-  }
-}
-
-
-
-# 🧠 Product Object Reference
-
-| Field | Type | Description |
-|-------|------|------------|
-| id | Integer | Primary key |
-| name | String | Product name |
-| price | Decimal | Product price |
-| quantity | Integer | Current stock |
-| min_threshold | Integer | Alert threshold |
-| expiration_date | Date (nullable) | Expiry date |
-| category | Integer | Category ID |
-| created_at | DateTime | Creation timestamp |
-| is_low_stock | Boolean | Computed field |
-| has_expiry | Boolean | True if expiration_date exists |
-
----
-
-# 🔒 Security Model
-
-- All endpoints (except register/login) require authentication  
-- Products filtered by category ownership  
-- Categories filtered by owner  
-- No direct product-user relation exposed  
-- Backend enforces ownership rules  
-
----
-
-# 🖥️ Frontend Integration Reference
-
-## Typical Dashboard Flow
-
-1. Login → store token  
-2. Fetch categories  
-3. Fetch products  
-4. Fetch alerts  
-5. Render dashboard widgets  
-
-## Suggested Dashboard Widgets
-
-- Total Products  
-- Total Categories  
-- Low Stock Count  
-- Expired Products Count  
-
-Use:
-
-```
-GET /api/products/alerts/
-```
-
-to populate notification badges.
-
----
-
-# 🧪 How to Trigger Alerts (Testing)
-
-## Trigger Low Stock
-
-```json
-{
-  "quantity": 2,
-  "min_threshold": 3
-}
-```
-
-## Trigger Expired
-
-```json
-{
-  "expiration_date": "2020-01-01"
+  "analytics": [
+    {
+      "category": "Electronics",
+      "total_value": 29000.0
+    },
+    {
+      "category": "Fruits",
+      "total_value": 7800.0
+    }
+  ]
 }
 ```
 
 ---
 
-# 📦 Installation (Backend)
+# 🧠 Product Model Reference
+
+| Field | Type |
+|-------|------|
+| id | Integer |
+| name | String |
+| price | Decimal |
+| quantity | Integer |
+| min_threshold | Integer |
+| expiration_date | Date (nullable) |
+| category | FK |
+| created_at | DateTime |
+| is_low_stock | Boolean (annotated) |
+| has_expiry | Boolean (annotated) |
+
+---
+
+# 🔎 Filtering, Search & Ordering
+
+Supported on product list:
+
+```
+/api/products/?category=2
+/api/products/?search=laptop
+/api/products/?ordering=price
+/api/products/?ordering=-created_at
+```
+
+---
+
+# 📄 Pagination
+
+Default page size: 10  
+Custom page size:
+
+```
+/api/products/?page_size=20
+```
+
+Max page size: 100
+
+---
+
+# ⚙️ Environment Configuration
+
+Create `.env` file:
+
+```
+SECRET_KEY=your-secret-key
+DEBUG=True
+DATABASE_URL=postgres://user:password@localhost:5432/dbname
+ALLOWED_HOSTS=127.0.0.1,localhost
+```
+
+---
+
+# 🛠 Installation
 
 ```bash
 git clone <repository-url>
@@ -844,27 +288,63 @@ python manage.py runserver
 
 ---
 
-# 🛠️ Possible Future Enhancements
+# 🏭 Production Notes
 
-- Pagination  
-- Search & filtering  
-- Sales tracking  
-- Stock movement history  
-- Email alerts  
-- Admin dashboard  
-- Role-based permissions  
-- Docker deployment  
-- CI/CD pipeline  
+Currently:
+
+- Token authentication enabled
+- PostgreSQL required
+- Gunicorn included
+- CORS enabled globally (dev mode)
+
+⚠️ For production:
+- Restrict `ALLOWED_HOSTS`
+- Disable `DEBUG`
+- Restrict CORS
+- Enable SSL
+- Add rate limiting
+- Add caching
+- Add tests
 
 ---
 
-# 🏁 Conclusion
+# 🧱 Project Strengths
 
-This API provides:
+- Clean multi-tenant architecture
+- Secure ownership validation in serializer
+- Aggregation-based dashboard (DB-level calculations)
+- Search + filtering + ordering
+- Pagination
+- Custom user model
+- Production-ready database configuration
 
-- Clean REST structure  
-- Secure user isolation  
-- Alert system ready for dashboard integration  
-- Frontend-ready responses  
-- Scalable architecture  
+---
 
+# 📈 Future Improvements
+
+- JWT support
+- Swagger / OpenAPI documentation
+- Docker setup
+- Unit & integration tests
+- Role-based permissions
+- Rate limiting
+- Caching dashboard
+- CI/CD pipeline
+
+---
+
+# 🏁 Summary
+
+This API delivers:
+
+- Secure user-isolated inventory management
+- Real-time low stock & expiration alerts
+- Financial analytics dashboard
+- RESTful scalable architecture
+- Frontend-ready responses
+
+Suitable for:
+- SaaS inventory system
+- Admin dashboard backend
+- Mobile app backend
+- Portfolio-level backend project
