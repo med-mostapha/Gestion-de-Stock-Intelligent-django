@@ -12,7 +12,10 @@ load_dotenv(dotenv_path=env_path)
 SECRET_KEY = os.getenv('SECRET_KEY', 'fallback-key-for-dev-only')
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 #ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
+ALLOWED_HOSTS = os.getenv(
+    "ALLOWED_HOSTS",
+    "localhost,127.0.0.1,.railway.app"
+).split(",")
 # 3. APPLICATION DEFINITION
 INSTALLED_APPS = [
     'corsheaders',
@@ -64,8 +67,12 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # 4. DATABASE (POSTGRESQL)
 db_url = os.getenv('DATABASE_URL')
-if not db_url:
-    raise ValueError("DATABASE_URL missing in .env")
+DATABASES = {
+    "default": dj_database_url.config(
+        default=os.getenv("DATABASE_URL"),
+        conn_max_age=600
+    )
+}
 
 DATABASES = {
     'default': dj_database_url.config(
@@ -111,3 +118,5 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 10  
 }
 CORS_ALLOW_ALL_ORIGINS = True
+
+STATIC_ROOT = BASE_DIR / "staticfiles"
