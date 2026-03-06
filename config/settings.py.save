@@ -11,8 +11,8 @@ load_dotenv(dotenv_path=env_path)
 # 2. SECURITY
 SECRET_KEY = os.getenv('SECRET_KEY', 'fallback-key-for-dev-only')
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
-#ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
+
 # 3. APPLICATION DEFINITION
 INSTALLED_APPS = [
     'corsheaders',
@@ -32,7 +32,6 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
-    'django.middleware.common.CommonMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',

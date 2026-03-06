@@ -102,7 +102,7 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
                 When(expiration_date__lte=today, then=True),
                 default=False, output_field=BooleanField(),
             )
-        )
+        ).order_by('-created_at')
 
 # --- ALERTS VIEW ---
 class ProductAlertView(APIView):
