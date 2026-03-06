@@ -12,10 +12,7 @@ load_dotenv(dotenv_path=env_path)
 SECRET_KEY = os.getenv('SECRET_KEY', 'fallback-key-for-dev-only')
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 #ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
-ALLOWED_HOSTS = os.getenv(
-    "ALLOWED_HOSTS",
-    "localhost,127.0.0.1,.railway.app"
-).split(",")
+ALLOWED_HOSTS = ["*"]
 # 3. APPLICATION DEFINITION
 INSTALLED_APPS = [
     'corsheaders',
